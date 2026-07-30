@@ -25,12 +25,12 @@ RUN npx next build --webpack
 
 FROM node:24-alpine AS runner
 
-LABEL org.opencontainers.image.title="Bulwark Webmail"
-LABEL org.opencontainers.image.description="Modern webmail client built with Next.js and the JMAP protocol"
-LABEL org.opencontainers.image.source="https://github.com/bulwarkmail/webmail"
-LABEL org.opencontainers.image.url="https://github.com/bulwarkmail/webmail"
+LABEL org.opencontainers.image.title="IrsalMail Webmail"
+LABEL org.opencontainers.image.description="IrsalMail - Enterprise Communication, Reimagined"
+LABEL org.opencontainers.image.source="https://github.com/Quantitive-Engineering/irsal-webmail-src"
+LABEL org.opencontainers.image.url="https://irsal.cloud"
 LABEL org.opencontainers.image.licenses="AGPL-3.0-only"
-LABEL org.opencontainers.image.vendor="rbm.systems"
+LABEL org.opencontainers.image.vendor="Irsal"
 
 WORKDIR /app
 ENV NODE_ENV=production
