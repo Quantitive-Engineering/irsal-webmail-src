@@ -1,16 +1,16 @@
 {
-  "name": "bulwark-webmail",
+  "name": "irsalmail-webmail",
   "version": "1.7.8",
-  "description": "Bulwark Webmail - a modern webmail client built for Stalwart Mail Server",
-  "author": "Bulwark Webmail <bulwark@rbm.systems>",
+  "description": "IrsalMail - Enterprise Communication, Reimagined",
+  "author": "Irsal <support@irsal.cloud>",
   "license": "AGPL-3.0-only",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/bulwarkmail/webmail.git"
+    "url": "git+https://github.com/Quantitive-Engineering/irsal-webmail-src.git"
   },
-  "homepage": "https://github.com/bulwarkmail/webmail",
+  "homepage": "https://irsal.cloud",
   "bugs": {
-    "url": "https://github.com/bulwarkmail/webmail/issues"
+    "url": "https://github.com/Quantitive-Engineering/irsal-webmail-src/issues"
   },
   "keywords": [
     "jmap",
