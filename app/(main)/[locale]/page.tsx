@@ -73,7 +73,7 @@ import { usePluginStore } from "@/stores/plugin-store";
 import { AppTopBannerSlot } from "@/components/plugins/app-top-banner-slot";
 import { useThemeStore } from "@/stores/theme-store";
 import { consumePendingMailto, subscribeToPendingMailto } from "@/lib/protocol-handlers/session";
-import type { ParsedMailto } from "@/lib/protocol-handlers/mailto";
+import { INTERNAL_MAILTO_EVENT, type ParsedMailto } from "@/lib/protocol-handlers/mailto";
 import { plainTextToComposerBody, getQuoteBodies } from "@/lib/email-composer-utils";
 import { appLifecycleHooks, uiHooks, routerHooks, toastHooks, emailHooks } from "@/lib/plugin-hooks";
 import { emailToReadView } from "@/lib/plugin-projection";
@@ -712,12 +712,13 @@ export default function Home() {
     handlers: keyboardHandlers,
   });
 
-  // Intercept browser refresh gestures (F5, Ctrl/Cmd+R, pull-to-refresh)
-  // and refresh mail data via JMAP instead of reloading the page.
-  useRefreshGesture({
-    enabled: isAuthenticated && !!client,
-    onRefresh: async () => {
-      if (!client) return;
+  // Shared mail refresh: re-fetch mailboxes (unread counts) + the active list
+  // via JMAP. Used by both the browser refresh gestures and the toolbar button.
+  const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+  const handleManualRefresh = useCallback(async () => {
+    if (!client) return;
+    setIsManualRefreshing(true);
+    try {
       const state = useEmailStore.getState();
       if (state.isScheduledView || state.selectedMailbox === SCHEDULED_MAILBOX_ID) {
         await Promise.all([
@@ -729,7 +730,16 @@ export default function Home() {
         await state.refreshScheduledMetadata(client);
         await (state.selectedMailbox ? state.fetchEmails(client, state.selectedMailbox) : state.fetchEmails(client));
       }
-    },
+    } finally {
+      setIsManualRefreshing(false);
+    }
+  }, [client]);
+
+  // Intercept browser refresh gestures (F5, Ctrl/Cmd+R, pull-to-refresh)
+  // and refresh mail data via JMAP instead of reloading the page.
+  useRefreshGesture({
+    enabled: isAuthenticated && !!client,
+    onRefresh: handleManualRefresh,
   });
 
   useEffect(() => {
@@ -957,6 +967,25 @@ export default function Home() {
     openPendingMailto();
     return subscribeToPendingMailto(openPendingMailto);
   }, [isAuthenticated, client, handleMailtoProtocolRequest]);
+
+  // Address links in the app's own chrome (contact cards, sidebars, contact
+  // details) compose in place. Unlike a request arriving from the OS handler,
+  // an in-app click carries its own context - the account being read - so this
+  // goes straight to the composer instead of through the account picker.
+  // Cancelling the event tells the link its click was taken.
+  useEffect(() => {
+    if (!isAuthenticated || !client) return;
+
+    const onInternalMailto = (event: Event) => {
+      const pending = (event as CustomEvent<ParsedMailto>).detail;
+      if (!pending) return;
+      event.preventDefault();
+      openMailtoDraft(pending);
+    };
+
+    window.addEventListener(INTERNAL_MAILTO_EVENT, onInternalMailto);
+    return () => window.removeEventListener(INTERNAL_MAILTO_EVENT, onInternalMailto);
+  }, [isAuthenticated, client, openMailtoDraft]);
 
   // Fallback fetch for paths that didn't go through login()'s prefetch
   // (notably checkAuth on page refresh). Settings pages can also prefill
@@ -1230,11 +1259,18 @@ export default function Home() {
   }) => {
     if (!client) return;
 
+    // Separates "the submission failed" from "a follow-up step failed". Only the
+    // former may propagate: the composer treats a resolved onSend as a delivered
+    // message and wipes its fields, so swallowing a real send failure here lost
+    // the user's message without so much as a toast (#702).
+    let submitted = false;
+
     try {
       const effectiveMode = pendingDraft?.mode ?? composerMode;
       const originalEmailId = selectedEmail?.id;
 
       const result = await sendEmail(client, data.to, data.subject, data.body, data.cc, data.bcc, data.identityId, data.fromEmail, data.draftId, data.fromName, data.htmlBody, data.attachments, data.inReplyTo, data.references, data.delayedUntil, data.envelopeMailFrom, { requestReadReceipt: data.requestReadReceipt });
+      submitted = true;
       setShowComposer(false);
       if (result.filingError) {
         // The mail went out, but a post-send step (filing to Sent /
@@ -1299,6 +1335,9 @@ export default function Home() {
       }
     } catch (error) {
       console.error("Failed to send email:", error);
+      // Post-send bookkeeping - refreshing Sent, flagging the original as
+      // answered, re-reading the thread - is cosmetic once the mail is out.
+      if (!submitted) throw error;
     }
   };
 
@@ -3103,6 +3142,20 @@ export default function Home() {
                         {activeFilterCount(searchFilters)}
                       </span>
                     )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleManualRefresh}
+                    disabled={!client || isManualRefreshing}
+                    className={cn(
+                      "flex-shrink-0 p-2 rounded-md transition-colors",
+                      "text-muted-foreground hover:text-foreground hover:bg-muted",
+                      (!client || isManualRefreshing) && "opacity-50 cursor-not-allowed"
+                    )}
+                    title={tCommon("refresh")}
+                    aria-label={tCommon("refresh")}
+                  >
+                    <RotateCcw className={cn("w-4 h-4", isManualRefreshing && "animate-spin")} />
                   </button>
                 </div>
               </div>
